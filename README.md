@@ -1,20 +1,18 @@
-# StockIQ
+StockIQ
+StockIQ is a GenAI-powered supply chain optimization tool that uses TimeLLM to predict product demand, optimize inventory, and provide explainable recommendations. Built on AWS with a Streamlit dashboard and FastAPI backend.
+Setup
 
-A TimeLLM-powered GenAI application for demand forecasting and inventory optimization.
+Install Python 3.11, Git, and AWS CLI.
+Clone this repository.
+Follow setup instructions in docs/.
 
-## Setup
-1. Clone the repository: `git clone https://github.com/your-username/StockIQ.git`
-2. Create a virtual environment: `python -m venv venv`
-3. Activate the environment: `venv\Scripts\activate`
-4. Install dependencies: `pip install -r requirements.txt`
+Features
 
-## Project Structure
-- `data/`: Sample datasets
-- `models/`: TimeLLM model artifacts
-- `src/`: Source code for API, dashboard, and forecasting
-- `tests/`: Unit tests
+Time-series demand forecasting
+Inventory optimization
+Explainable AI recommendations
+Real-time data enrichment
+Interactive dashboard
 
-## Next Steps
-- Add sample data
-- Implement FastAPI backend
-- Build Streamlit dashboard
+License
+MIT

@@ -1,7 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
 venv/
-     __pycache__/
-     *.pyc
-     *.pyo
-     *.pyd
-     *.log
-     *.env
+ENV/
+.env
+*.env
+
+# AWS
+.aws/
+credentials
+config
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Project-specific
+data/
+*.csv
+*.json
+*.log
