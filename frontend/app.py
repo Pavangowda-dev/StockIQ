@@ -63,7 +63,6 @@ if uploaded_file is not None:
 
 # Retrieve data from S3
 st.header("Retrieve Sales Data from S3")
-# List available files from session state
 if "uploaded_files" in st.session_state and st.session_state.uploaded_files:
     selected_filename = st.selectbox("Select a CSV file from S3", st.session_state.uploaded_files)
 else:
@@ -85,3 +84,49 @@ if st.button("Retrieve Data"):
             st.error(f"Retrieval failed: {response.json().get('detail', 'Unknown error')}")
     except Exception as e:
         st.error(f"Error retrieving data: {str(e)}")
+
+# Forecast sales data
+st.header("Forecast Sales Data")
+if "uploaded_files" in st.session_state and st.session_state.uploaded_files:
+    forecast_filename = st.selectbox("Select a CSV file to forecast", st.session_state.uploaded_files, key="forecast_select")
+else:
+    forecast_filename = st.text_input("Enter CSV filename to forecast (e.g., sales_data/2025/07/03_1.csv)")
+if st.button("Generate Forecast"):
+    try:
+        response = requests.get(f"http://localhost:8000/data/forecast/{forecast_filename}")
+        if response.status_code == 200:
+            forecast_df = pd.DataFrame(response.json().get("forecast"))
+            forecast_s3_path = response.json().get("forecast_s3_path")
+            st.subheader("Sales Forecast")
+            st.dataframe(forecast_df.head(), use_container_width=True)
+            
+            # Plot forecast
+            st.subheader("Forecast Trend")
+            forecast_df["ds"] = pd.to_datetime(forecast_df["ds"])
+            fig = px.line(
+                forecast_df,
+                x="ds",
+                y="yhat",
+                title="Sales Forecast (Next 30 Days)",
+                labels={"ds": "Date", "yhat": "Predicted Quantity"}
+            )
+            fig.add_scatter(
+                x=forecast_df["ds"],
+                y=forecast_df["yhat_lower"],
+                mode="lines",
+                name="Lower Bound",
+                line=dict(dash="dash")
+            )
+            fig.add_scatter(
+                x=forecast_df["ds"],
+                y=forecast_df["yhat_upper"],
+                mode="lines",
+                name="Upper Bound",
+                line=dict(dash="dash")
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.success(f"Forecast stored at S3: {forecast_s3_path}")
+        else:
+            st.error(f"Forecast failed: {response.json().get('detail', 'Unknown error')}")
+    except Exception as e:
+        st.error(f"Error generating forecast: {str(e)}")
