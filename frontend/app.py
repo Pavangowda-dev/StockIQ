@@ -3,6 +3,8 @@ import requests
 import pandas as pd
 import plotly.express as px
 import io
+import boto3
+from botocore.exceptions import ClientError
 
 # Streamlit page configuration
 st.set_page_config(page_title="StockIQ", layout="wide", page_icon="📦")
@@ -44,7 +46,14 @@ if uploaded_file is not None:
                 response = requests.post("http://localhost:8000/data/upload", files=files)
                 
                 if response.status_code == 200:
-                    st.success(response.json().get("message", "File uploaded successfully"))
+                    message = response.json().get("message", "File uploaded successfully")
+                    s3_filename = response.json().get("s3_filename", "Unknown")
+                    st.success(f"{message} (S3 path: {s3_filename})")
+                    # Store filename in session state
+                    if "uploaded_files" not in st.session_state:
+                        st.session_state.uploaded_files = []
+                    if s3_filename not in st.session_state.uploaded_files:
+                        st.session_state.uploaded_files.append(s3_filename)
                 else:
                     st.error(f"Upload failed: {response.json().get('detail', 'Unknown error')}")
             except Exception as e:
@@ -54,10 +63,14 @@ if uploaded_file is not None:
 
 # Retrieve data from S3
 st.header("Retrieve Sales Data from S3")
-filename = st.text_input("Enter CSV filename (e.g., sample_sales.csv)")
+# List available files from session state
+if "uploaded_files" in st.session_state and st.session_state.uploaded_files:
+    selected_filename = st.selectbox("Select a CSV file from S3", st.session_state.uploaded_files)
+else:
+    selected_filename = st.text_input("Enter CSV filename (e.g., sales_data/2025/07/03_1.csv)")
 if st.button("Retrieve Data"):
     try:
-        response = requests.get(f"http://localhost:8000/data/get/{filename}")
+        response = requests.get(f"http://localhost:8000/data/get/{selected_filename}")
         if response.status_code == 200:
             df = pd.DataFrame(response.json())
             st.subheader("Retrieved Sales Data")

@@ -52,9 +52,17 @@ async def upload_sales_data(file: UploadFile = File(...)):
             logger.error(f"Missing columns: {missing_cols}")
             raise HTTPException(status_code=400, detail=f"CSV must contain columns: {', '.join(required_columns)}")
         
-        # Generate unique S3 filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        s3_filename = f"sales_data/{file.filename.split('.csv')[0]}_{timestamp}.csv"
+        # Generate unique S3 filename with new format (e.g., 2025/07/03_1.csv)
+        today = datetime.now()
+        date_path = today.strftime("%Y/%m/%d")
+        # Count existing files for the day to increment number
+        try:
+            response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"sales_data/{date_path}_")
+            file_count = len(response.get("Contents", [])) + 1 if response.get("Contents") else 1
+        except ClientError as e:
+            logger.error(f"Error listing S3 objects: {str(e)}")
+            file_count = 1
+        s3_filename = f"sales_data/{date_path}_{file_count}.csv"
         
         # Upload to S3
         logger.info(f"Uploading {s3_filename} to S3 bucket: {BUCKET_NAME}")
@@ -84,7 +92,7 @@ async def upload_sales_data(file: UploadFile = File(...)):
         logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-@router.get("/get/{filename}")
+@router.get("/get/{filename:path}")
 async def get_sales_data(filename: str):
     try:
         # Validate filename
@@ -92,9 +100,10 @@ async def get_sales_data(filename: str):
             logger.error(f"Invalid file format: {filename}")
             raise HTTPException(status_code=400, detail="Only CSV files are supported")
         
-        # Retrieve from S3
-        logger.info(f"Retrieving {filename} from S3 bucket: {BUCKET_NAME}")
-        response = s3_client.get_object(Bucket=BUCKET_NAME, Key=f"sales_data/{filename}")
+        # Ensure filename includes sales_data/ prefix
+        s3_key = filename if filename.startswith("sales_data/") else f"sales_data/{filename}"
+        logger.info(f"Retrieving {s3_key} from S3 bucket: {BUCKET_NAME}")
+        response = s3_client.get_object(Bucket=BUCKET_NAME, Key=s3_key)
         content = response["Body"].read()
         df = pd.read_csv(io.BytesIO(content))
         
@@ -103,6 +112,8 @@ async def get_sales_data(filename: str):
     
     except ClientError as e:
         logger.error(f"S3 retrieval error: {str(e)}")
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            raise HTTPException(status_code=404, detail="File not found in S3")
         raise HTTPException(status_code=500, detail=f"Failed to retrieve from S3: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
