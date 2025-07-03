@@ -141,6 +141,11 @@ async def forecast_sales_data(filename: str):
             logger.error(f"Missing columns: {missing_cols}")
             raise HTTPException(status_code=400, detail=f"CSV must contain columns: {', '.join(required_columns)}")
         
+        # Check for NaN values
+        if df[["date", "quantity"]].isna().any().any():
+            logger.error("Data contains NaN values in date or quantity columns")
+            raise HTTPException(status_code=400, detail="Data contains NaN values in date or quantity columns")
+        
         # Prepare data for Prophet (per product)
         df["date"] = pd.to_datetime(df["date"])
         products = df["product_id"].unique()
@@ -148,10 +153,17 @@ async def forecast_sales_data(filename: str):
         inventory_recommendations = []
         lead_time_days = 7  # Assumed lead time
         safety_stock_factor = 1.5  # 50% buffer for variability
+        skipped_products = []
         
         for product in products:
             # Filter data for the product
             df_product = df[df["product_id"] == product][["date", "quantity"]].rename(columns={"date": "ds", "quantity": "y"})
+            
+            # Check if enough data points (at least 2 non-NaN rows)
+            if len(df_product) < 2:
+                logger.warning(f"Skipping product {product}: insufficient data points ({len(df_product)} rows)")
+                skipped_products.append(product)
+                continue
             
             # Initialize and fit Prophet model with fine-tuned parameters
             model = Prophet(
@@ -161,7 +173,7 @@ async def forecast_sales_data(filename: str):
                 seasonality_mode="multiplicative",  # Better for varying trends
                 changepoint_prior_scale=0.05  # Adjust for flexibility in trend changes
             )
-            model.add_country_holidays(country_name="US")  # Add US holidays for better accuracy
+            model.add_country_holidays(country_name="US")  # Add US holidays
             model.fit(df_product)
             
             # Create future dataframe for next 30 days
@@ -183,6 +195,10 @@ async def forecast_sales_data(filename: str):
                 "safety_stock": round(safety_stock, 2),
                 "reorder_point": round(reorder_point, 2)
             })
+        
+        if not forecasts:
+            logger.error("No products have sufficient data for forecasting")
+            raise HTTPException(status_code=400, detail="No products have at least 2 data points for forecasting")
         
         # Combine forecasts
         forecast_df = pd.concat(forecasts, ignore_index=True)
@@ -212,13 +228,17 @@ async def forecast_sales_data(filename: str):
         logger.info(f"Stored inventory recommendations at {inventory_filename}")
         
         # Return forecast and inventory recommendations
-        return {
+        response = {
             "message": f"Forecast and inventory recommendations generated for {filename}",
             "forecast": forecast_df.to_dict(orient="records"),
             "inventory": inventory_df.to_dict(orient="records"),
             "forecast_s3_path": forecast_filename,
             "inventory_s3_path": inventory_filename
         }
+        if skipped_products:
+            response["warning"] = f"Skipped products due to insufficient data: {', '.join(skipped_products)}"
+        
+        return response
     
     except ClientError as e:
         logger.error(f"S3 retrieval error: {str(e)}")
