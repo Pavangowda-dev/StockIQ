@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/data", tags=["data"])
 
 # Replace with your actual S3 bucket name
-BUCKET_NAME = "stockiq-data-<your-username>"  # Update with your bucket name
+BUCKET_NAME = "stockiq-data-pavan"  # Update with your bucket name
 s3_client = boto3.client("s3")
 
 @router.post("/upload")
