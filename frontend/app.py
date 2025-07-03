@@ -86,28 +86,33 @@ if st.button("Retrieve Data"):
         st.error(f"Error retrieving data: {str(e)}")
 
 # Forecast sales data
-st.header("Forecast Sales Data")
+st.header("Forecast Sales Data and Inventory Optimization")
 if "uploaded_files" in st.session_state and st.session_state.uploaded_files:
     forecast_filename = st.selectbox("Select a CSV file to forecast", st.session_state.uploaded_files, key="forecast_select")
 else:
     forecast_filename = st.text_input("Enter CSV filename to forecast (e.g., sales_data/2025/07/03_1.csv)")
-if st.button("Generate Forecast"):
+if st.button("Generate Forecast and Inventory Recommendations"):
     try:
         response = requests.get(f"http://localhost:8000/data/forecast/{forecast_filename}")
         if response.status_code == 200:
             forecast_df = pd.DataFrame(response.json().get("forecast"))
+            inventory_df = pd.DataFrame(response.json().get("inventory"))
             forecast_s3_path = response.json().get("forecast_s3_path")
-            st.subheader("Sales Forecast")
+            inventory_s3_path = response.json().get("inventory_s3_path")
+            
+            # Display forecast
+            st.subheader("Sales Forecast (Next 30 Days)")
             st.dataframe(forecast_df.head(), use_container_width=True)
             
             # Plot forecast
-            st.subheader("Forecast Trend")
+            st.subheader("Forecast Trend by Product")
             forecast_df["ds"] = pd.to_datetime(forecast_df["ds"])
             fig = px.line(
                 forecast_df,
                 x="ds",
                 y="yhat",
-                title="Sales Forecast (Next 30 Days)",
+                color="product_id",
+                title="Sales Forecast by Product (Next 30 Days)",
                 labels={"ds": "Date", "yhat": "Predicted Quantity"}
             )
             fig.add_scatter(
@@ -125,7 +130,13 @@ if st.button("Generate Forecast"):
                 line=dict(dash="dash")
             )
             st.plotly_chart(fig, use_container_width=True)
+            
+            # Display inventory recommendations
+            st.subheader("Inventory Recommendations")
+            st.dataframe(inventory_df, use_container_width=True)
+            
             st.success(f"Forecast stored at S3: {forecast_s3_path}")
+            st.success(f"Inventory recommendations stored at S3: {inventory_s3_path}")
         else:
             st.error(f"Forecast failed: {response.json().get('detail', 'Unknown error')}")
     except Exception as e:
