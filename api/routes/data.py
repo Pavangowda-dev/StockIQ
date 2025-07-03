@@ -4,6 +4,7 @@ import io
 import boto3
 from botocore.exceptions import ClientError
 import logging
+from datetime import datetime
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/data", tags=["data"])
 
 # Replace with your actual S3 bucket name
-BUCKET_NAME = "stockiq-data-<your-username>"  # Update with your bucket name
+BUCKET_NAME = "stockiq-data-pavan"  # Update with your actual bucket name
 s3_client = boto3.client("s3")
 
 @router.post("/upload")
@@ -51,16 +52,24 @@ async def upload_sales_data(file: UploadFile = File(...)):
             logger.error(f"Missing columns: {missing_cols}")
             raise HTTPException(status_code=400, detail=f"CSV must contain columns: {', '.join(required_columns)}")
         
-        # Upload to S3
-        logger.info(f"Uploading {file.filename} to S3 bucket: {BUCKET_NAME}")
-        s3_client.upload_fileobj(
-            io.BytesIO(content),
-            BUCKET_NAME,
-            f"sales_data/{file.filename}"
-        )
+        # Generate unique S3 filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        s3_filename = f"sales_data/{file.filename.split('.csv')[0]}_{timestamp}.csv"
         
-        logger.info(f"Successfully uploaded {file.filename} with {len(df)} rows")
-        return {"message": f"Uploaded {file.filename} with {len(df)} rows to S3"}
+        # Upload to S3
+        logger.info(f"Uploading {s3_filename} to S3 bucket: {BUCKET_NAME}")
+        try:
+            s3_client.upload_fileobj(
+                io.BytesIO(content),
+                BUCKET_NAME,
+                s3_filename
+            )
+        except ClientError as e:
+            logger.error(f"S3 upload error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to upload to S3: {str(e)}")
+        
+        logger.info(f"Successfully uploaded {s3_filename} with {len(df)} rows")
+        return {"message": f"Uploaded {file.filename} with {len(df)} rows to S3", "s3_filename": s3_filename}
     
     except pd.errors.EmptyDataError as e:
         logger.error(f"CSV parsing error: {str(e)}")
@@ -81,7 +90,7 @@ async def get_sales_data(filename: str):
         # Validate filename
         if not filename.endswith(".csv"):
             logger.error(f"Invalid file format: {filename}")
-            raise HTTPException(status_code=400, ontde="Only CSV files are supported")
+            raise HTTPException(status_code=400, detail="Only CSV files are supported")
         
         # Retrieve from S3
         logger.info(f"Retrieving {filename} from S3 bucket: {BUCKET_NAME}")
