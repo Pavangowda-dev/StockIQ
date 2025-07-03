@@ -100,6 +100,10 @@ if st.button("Generate Forecast and Inventory Recommendations"):
             forecast_s3_path = response.json().get("forecast_s3_path")
             inventory_s3_path = response.json().get("inventory_s3_path")
             
+            # Display warning if any products were skipped
+            if "warning" in response.json():
+                st.warning(response.json().get("warning"))
+            
             # Display forecast
             st.subheader("Sales Forecast (Next 30 Days)")
             st.dataframe(forecast_df.head(), use_container_width=True)
